@@ -1,4 +1,7 @@
+use std::path::PathBuf;
 use clap::{Parser, Subcommand};
+
+use crate::state::RunContext;
 
 #[derive(Parser)]
 #[command(name = "minion", about = "One shot coding agent")]
@@ -18,6 +21,10 @@ enum Command {
         /// Read task from a file
         #[arg(short, long, name = "file")]
         file: Option<String>,
+
+        /// Path to the target git repository (defaults to current directory)
+        #[arg(short, long, name = "repo", default_value = ".")]
+        repo: PathBuf,
     },
 }
 
@@ -25,10 +32,11 @@ pub async fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Run { task, file } => {
+        Command::Run { task, file, repo } => {
             let task_input = resolve_task(task, file).await?;
-            tracing::info!("Starting run: {}", task_input);
-            println!("Starting run: {}", task_input);
+            let ctx = RunContext::new(task_input, &repo)?;
+            tracing::info!(run_id = %ctx.run_id, branch = %ctx.branch(), "run started");
+            println!("run {} on branch {}", ctx.run_id, ctx.branch());
             // TODO: hand off to state machine — task #8
             Ok(())
         }

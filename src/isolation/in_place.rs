@@ -1,0 +1,105 @@
+use anyhow::{Context, bail};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use super::Isolation;
+
+/// Isolates a run by creating a new branch in the target repo's working directory.
+/// The developer's original branch is restored on Drop.
+pub struct InPlaceBranchIsolation {
+    repo_root: PathBuf,
+    branch: String,
+    original_branch: String,
+}
+
+impl InPlaceBranchIsolation {
+    pub fn create(repo_root: &Path, run_id: &str, task: &str) -> anyhow::Result<Self> {
+        let original_branch = current_branch(repo_root)?;
+        let branch = format!("minion/{}/{}", &run_id[..8], make_task_slug(task));
+
+        git(repo_root, &["checkout", "-b", &branch])
+            .with_context(|| format!("failed to create branch {branch}"))?;
+
+        Ok(Self {
+            repo_root: repo_root.to_path_buf(),
+            branch,
+            original_branch,
+        })
+    }
+}
+
+impl Isolation for InPlaceBranchIsolation {
+    fn working_path(&self) -> &Path {
+        &self.repo_root
+    }
+
+    fn branch(&self) -> &str {
+        &self.branch
+    }
+}
+
+impl Drop for InPlaceBranchIsolation {
+    fn drop(&mut self) {
+        let _ = git(&self.repo_root, &["checkout", &self.original_branch]);
+    }
+}
+
+pub fn find_repo_root(start: &Path) -> anyhow::Result<PathBuf> {
+    let mut current = start.canonicalize()?;
+    loop {
+        if current.join(".git").exists() {
+            return Ok(current);
+        }
+        match current.parent() {
+            Some(parent) => current = parent.to_path_buf(),
+            None => bail!("no git repository found from {}", start.display()),
+        }
+    }
+}
+
+fn current_branch(repo_root: &Path) -> anyhow::Result<String> {
+    git_output(repo_root, &["rev-parse", "--abbrev-ref", "HEAD"])
+}
+
+/// Runs a git command, returns stdout as a trimmed string.
+fn git_output(repo_root: &Path, args: &[&str]) -> anyhow::Result<String> {
+    let out = Command::new("git")
+        .args(args)
+        .current_dir(repo_root)
+        .output()
+        .context("failed to spawn git")?;
+
+    if !out.status.success() {
+        bail!("git {} failed: {}", args.join(" "), String::from_utf8_lossy(&out.stderr));
+    }
+
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Runs a git command, checks exit status only.
+fn git(repo_root: &Path, args: &[&str]) -> anyhow::Result<()> {
+    let status = Command::new("git")
+        .args(args)
+        .current_dir(repo_root)
+        .status()
+        .context("failed to spawn git")?;
+
+    if !status.success() {
+        bail!("git {} exited with {}", args.join(" "), status);
+    }
+    Ok(())
+}
+
+fn make_task_slug(task: &str) -> String {
+    task.split_whitespace()
+        .take(5)
+        .map(|w| {
+            w.chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect::<String>()
+                .to_lowercase()
+        })
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
