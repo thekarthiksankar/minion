@@ -19,6 +19,7 @@ impl Dispatcher {
         d.register(Box::new(super::read_file::ReadFileTool));
         d.register(Box::new(super::write_file::WriteFileTool));
         d.register(Box::new(super::run_command::RunCommandTool));
+        d.register(Box::new(super::git_add::GitAddTool));
         d
     }
 

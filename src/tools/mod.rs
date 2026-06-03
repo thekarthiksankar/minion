@@ -1,4 +1,5 @@
 mod dispatcher;
+mod git_add;
 mod path;
 mod read_file;
 mod run_command;
