@@ -1,7 +1,5 @@
 pub mod claude;
 
-pub use claude::ClaudeClient;
-
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
