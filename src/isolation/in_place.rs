@@ -14,6 +14,8 @@ pub struct InPlaceBranchIsolation {
 
 impl InPlaceBranchIsolation {
     pub fn create(repo_root: &Path, run_id: &str, task: &str) -> anyhow::Result<Self> {
+        ensure_git_installed()?;
+        ensure_git_initialised(repo_root)?;
         let original_branch = current_branch(repo_root)?;
         ensure_git_identity(repo_root)?;
         let branch = format!("minion/{}/{}", &run_id[..8], make_task_slug(task));
@@ -60,6 +62,27 @@ pub fn find_repo_root(start: &Path) -> anyhow::Result<PathBuf> {
 
 fn current_branch(repo_root: &Path) -> anyhow::Result<String> {
     git_output(repo_root, &["rev-parse", "--abbrev-ref", "HEAD"])
+}
+
+/// Checks that the git binary is installed and on PATH before the run starts.
+fn ensure_git_installed() -> anyhow::Result<()> {
+    let output = Command::new("git").arg("--version").output();
+    match output {
+        Ok(o) if o.status.success() => Ok(()),
+        _ => bail!("git is not installed or not on PATH — install git and retry"),
+    }
+}
+
+/// Checks that the target directory is inside an initialised git repository.
+fn ensure_git_initialised(repo_root: &Path) -> anyhow::Result<()> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .current_dir(repo_root)
+        .output();
+    match output {
+        Ok(o) if o.status.success() => Ok(()),
+        _ => bail!("'{}' is not inside a git repository — run 'git init' first", repo_root.display()),
+    }
 }
 
 /// Checks that git user.name and user.email are configured before the run starts.
