@@ -15,6 +15,7 @@ pub struct InPlaceBranchIsolation {
 impl InPlaceBranchIsolation {
     pub fn create(repo_root: &Path, run_id: &str, task: &str) -> anyhow::Result<Self> {
         let original_branch = current_branch(repo_root)?;
+        ensure_git_identity(repo_root)?;
         let branch = format!("minion/{}/{}", &run_id[..8], make_task_slug(task));
 
         git(repo_root, &["checkout", "-b", &branch])
@@ -59,6 +60,21 @@ pub fn find_repo_root(start: &Path) -> anyhow::Result<PathBuf> {
 
 fn current_branch(repo_root: &Path) -> anyhow::Result<String> {
     git_output(repo_root, &["rev-parse", "--abbrev-ref", "HEAD"])
+}
+
+/// Checks that git user.name and user.email are configured before the run starts.
+/// Fails with an actionable message so the user can fix it before retrying.
+fn ensure_git_identity(repo_root: &Path) -> anyhow::Result<()> {
+    let name = git_output(repo_root, &["config", "user.name"]).unwrap_or_default();
+    let email = git_output(repo_root, &["config", "user.email"]).unwrap_or_default();
+    if name.is_empty() || email.is_empty() {
+        bail!(
+            "git identity is not configured. Run:\n  \
+            git config --global user.name \"Your Name\"\n  \
+            git config --global user.email \"you@example.com\""
+        );
+    }
+    Ok(())
 }
 
 /// Runs a git command, returns stdout as a trimmed string.
