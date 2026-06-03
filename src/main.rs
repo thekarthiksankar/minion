@@ -1,3 +1,4 @@
+mod agent;
 mod cli;
 mod isolation;
 mod llm;
