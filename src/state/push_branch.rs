@@ -7,7 +7,7 @@ pub struct PushBranch;
 
 impl PushBranch {
     pub fn run(&self, ctx: &RunContext) -> anyhow::Result<()> {
-        tracing::info!(run_id = %ctx.run_id, branch = %ctx.branch(), "push branch");
+        println!("  pushing {} to origin...", ctx.branch());
 
         let output = Command::new("git")
             .args(["push", "origin", ctx.branch()])
@@ -19,6 +19,8 @@ impl PushBranch {
             let stderr = String::from_utf8_lossy(&output.stderr);
             anyhow::bail!("git push failed: {stderr}");
         }
+
+        println!("  pushed");
         Ok(())
     }
 }

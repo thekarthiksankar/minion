@@ -7,7 +7,13 @@ pub struct Implement;
 
 impl Implement {
     pub async fn run(&self, ctx: &RunContext, client: Box<dyn LlmClient>) -> LoopOutcome {
-        tracing::info!(run_id = %ctx.run_id, "implement");
-        AgentLoop::new(client).run(ctx).await
+        println!("  agent is working...");
+        let outcome = AgentLoop::new(client).run(ctx).await;
+        match &outcome {
+            LoopOutcome::Complete => println!("  agent finished"),
+            LoopOutcome::StepLimitExhausted => println!("  agent hit step limit"),
+            LoopOutcome::Failed(e) => println!("  agent failed: {e}"),
+        }
+        outcome
     }
 }

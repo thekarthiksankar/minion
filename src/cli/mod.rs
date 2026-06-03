@@ -41,13 +41,13 @@ pub async fn run() -> anyhow::Result<()> {
 
             match run_state_machine(ctx, client).await {
                 RunOutcome::Succeeded { branch } => {
-                    println!("done — branch: {branch}");
+                    println!("\ndone — open a PR from branch: {branch}");
                 }
-                RunOutcome::StepLimitExhausted { branch } => {
-                    println!("step limit reached — partial work on branch: {branch}");
+                RunOutcome::StepLimitExhausted { branch: _ } => {
+                    println!("\nstopped — step limit reached, branch cleaned up");
                 }
                 RunOutcome::Failed(e) => {
-                    eprintln!("run failed: {e}");
+                    eprintln!("\nfailed: {e}");
                     std::process::exit(1);
                 }
             }

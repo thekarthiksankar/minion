@@ -53,8 +53,10 @@ pub async fn run_state_machine(ctx: RunContext, client: Box<dyn LlmClient>) -> R
     let branch = ctx.branch().to_string();
     let repo = ctx.working_path().to_path_buf();
 
+    println!("[1/3] gathering context");
     GatherContext.run(&ctx);
 
+    println!("[2/3] implementing");
     match Implement.run(&ctx, client).await {
         LoopOutcome::Failed(e) => {
             cleanup_branch(&repo, &branch);
@@ -67,6 +69,7 @@ pub async fn run_state_machine(ctx: RunContext, client: Box<dyn LlmClient>) -> R
         LoopOutcome::Complete => {}
     }
 
+    println!("[3/3] pushing branch");
     if let Err(e) = PushBranch.run(&ctx) {
         cleanup_branch(&repo, &branch);
         return RunOutcome::Failed(e);

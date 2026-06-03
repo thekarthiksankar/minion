@@ -58,12 +58,17 @@ impl AgentLoop {
             let mut tool_results = Vec::new();
             for block in tool_uses {
                 if let ContentBlock::ToolUse { id, name, input } = block {
+                    print!("    → {name} ... ");
                     let result = self
                         .dispatcher
                         .dispatch(name.as_str(), input.clone(), ctx.working_path())
                         .unwrap_or_else(|e| format!("error: {e}"));
 
-                    tracing::info!(tool = %name, success = !result.starts_with("error:"), "tool call");
+                    if result.starts_with("error:") {
+                        println!("failed: {result}");
+                    } else {
+                        println!("ok");
+                    }
 
                     tool_results.push(ContentBlock::ToolResult {
                         tool_use_id: id.clone(),
