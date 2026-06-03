@@ -19,10 +19,19 @@ pub struct ClaudeClient {
 }
 
 impl ClaudeClient {
-    pub fn from_env() -> anyhow::Result<Self> {
-        let api_key = std::env::var("ANTHROPIC_API_KEY").context("ANTHROPIC_API_KEY not set")?;
-        Ok(Self { http: Client::new(), api_key })
+    pub fn new(api_key: String) -> Self {
+        Self { http: Client::new(), api_key }
     }
+
+    pub fn from_env() -> anyhow::Result<Self> {
+        let api_key = api_key_from_env()?;
+        Ok(Self::new(api_key))
+    }
+}
+
+fn api_key_from_env() -> anyhow::Result<String> {
+    std::env::var("ANTHROPIC_API_KEY")
+        .context("ANTHROPIC_API_KEY not set — export it before running: export ANTHROPIC_API_KEY=<your-key>")
 }
 
 #[derive(Serialize)]

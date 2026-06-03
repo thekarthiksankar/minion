@@ -34,10 +34,9 @@ pub async fn run() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Run { task, file, repo } => {
+            let client = llm::default_client()?;
             let task_input = resolve_task(task, file).await?;
             let ctx = RunContext::new(task_input, &repo)?;
-            let client = llm::default_client()?;
-            tracing::info!(run_id = %ctx.run_id, branch = %ctx.branch(), "run started");
 
             match run_state_machine(ctx, client).await {
                 RunOutcome::Succeeded { branch } => {
