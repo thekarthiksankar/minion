@@ -2,7 +2,8 @@ mod gather_context;
 mod implement;
 mod push_branch;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use uuid::Uuid;
 
 use crate::agent::LoopOutcome;
@@ -49,20 +50,35 @@ pub enum RunOutcome {
 }
 
 pub async fn run_state_machine(ctx: RunContext, client: Box<dyn LlmClient>) -> RunOutcome {
+    let branch = ctx.branch().to_string();
+    let repo = ctx.working_path().to_path_buf();
+
     GatherContext.run(&ctx);
 
     match Implement.run(&ctx, client).await {
-        LoopOutcome::Failed(e) => return RunOutcome::Failed(e),
+        LoopOutcome::Failed(e) => {
+            cleanup_branch(&repo, &branch);
+            return RunOutcome::Failed(e);
+        }
         LoopOutcome::StepLimitExhausted => {
-            tracing::warn!(run_id = %ctx.run_id, "step limit exhausted");
-            return RunOutcome::StepLimitExhausted { branch: ctx.branch().to_string() };
+            cleanup_branch(&repo, &branch);
+            return RunOutcome::StepLimitExhausted { branch };
         }
         LoopOutcome::Complete => {}
     }
 
     if let Err(e) = PushBranch.run(&ctx) {
+        cleanup_branch(&repo, &branch);
         return RunOutcome::Failed(e);
     }
 
-    RunOutcome::Succeeded { branch: ctx.branch().to_string() }
+    RunOutcome::Succeeded { branch }
+}
+
+/// Deletes the minion branch after the run context is dropped (i.e. after checkout back to original branch).
+fn cleanup_branch(repo: &PathBuf, branch: &str) {
+    let _ = Command::new("git")
+        .args(["branch", "-D", branch])
+        .current_dir(repo)
+        .output();
 }
