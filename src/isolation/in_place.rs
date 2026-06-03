@@ -115,16 +115,16 @@ fn git_output(repo_root: &Path, args: &[&str]) -> anyhow::Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// Runs a git command, checks exit status only.
+/// Runs a git command, checks exit status only. Captures output to prevent git printing to the terminal.
 fn git(repo_root: &Path, args: &[&str]) -> anyhow::Result<()> {
-    let status = Command::new("git")
+    let out = Command::new("git")
         .args(args)
         .current_dir(repo_root)
-        .status()
+        .output()
         .context("failed to spawn git")?;
 
-    if !status.success() {
-        bail!("git {} exited with {}", args.join(" "), status);
+    if !out.status.success() {
+        bail!("git {} failed: {}", args.join(" "), String::from_utf8_lossy(&out.stderr));
     }
     Ok(())
 }
