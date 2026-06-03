@@ -39,6 +39,13 @@ impl Dispatcher {
             None => anyhow::bail!("unknown tool: {name}"),
         }
     }
+
+    pub fn summary(&self, name: &str, input: &ToolCallInput) -> String {
+        match self.tools.get(name) {
+            Some(tool) => tool.summary(input),
+            None => String::new(),
+        }
+    }
 }
 
 #[cfg(test)]

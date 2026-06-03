@@ -16,5 +16,6 @@ pub type ToolCallInput = serde_json::Value;
 
 pub trait Tool: Send + Sync {
     fn schema(&self) -> ToolSchema;
+    fn summary(&self, input: &ToolCallInput) -> String;
     fn run(&self, root: &Path, input: ToolCallInput) -> anyhow::Result<String>;
 }

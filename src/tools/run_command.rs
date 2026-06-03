@@ -57,6 +57,15 @@ impl Tool for RunCommandTool {
         }
     }
 
+    fn summary(&self, input: &ToolCallInput) -> String {
+        let cmd = input["command"].as_str().unwrap_or("?");
+        let args = input["args"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(" "))
+            .unwrap_or_default();
+        if args.is_empty() { cmd.to_string() } else { format!("{cmd} {args}") }
+    }
+
     fn run(&self, root: &Path, input: ToolCallInput) -> anyhow::Result<String> {
         let input: RunCommandInput = serde_json::from_value(input)?;
         self.execute(root, input)

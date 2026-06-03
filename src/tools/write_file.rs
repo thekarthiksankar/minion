@@ -52,6 +52,10 @@ impl Tool for WriteFileTool {
         }
     }
 
+    fn summary(&self, input: &ToolCallInput) -> String {
+        input["path"].as_str().unwrap_or("?").to_string()
+    }
+
     fn run(&self, root: &Path, input: ToolCallInput) -> anyhow::Result<String> {
         let input: WriteFileInput = serde_json::from_value(input)?;
         self.execute(root, input)

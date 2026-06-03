@@ -65,6 +65,15 @@ impl Tool for ReadFileTool {
         }
     }
 
+    fn summary(&self, input: &ToolCallInput) -> String {
+        let path = input["path"].as_str().unwrap_or("?");
+        match (input["start_line"].as_u64(), input["end_line"].as_u64()) {
+            (Some(s), Some(e)) => format!("{path} (lines {s}–{e})"),
+            (Some(s), None) => format!("{path} (from line {s})"),
+            _ => path.to_string(),
+        }
+    }
+
     fn run(&self, root: &Path, input: ToolCallInput) -> anyhow::Result<String> {
         let input: ReadFileInput = serde_json::from_value(input)?;
         self.execute(root, input)

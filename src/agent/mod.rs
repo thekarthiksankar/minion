@@ -58,7 +58,8 @@ impl AgentLoop {
             let mut tool_results = Vec::new();
             for block in tool_uses {
                 if let ContentBlock::ToolUse { id, name, input } = block {
-                    print!("    → {name} ... ");
+                    let summary = self.dispatcher.summary(name.as_str(), &input);
+                    print!("    → {name}({summary}) ... ");
                     let result = self
                         .dispatcher
                         .dispatch(name.as_str(), input.clone(), ctx.working_path())

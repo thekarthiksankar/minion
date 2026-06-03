@@ -55,6 +55,13 @@ impl Tool for GitAddTool {
         }
     }
 
+    fn summary(&self, input: &ToolCallInput) -> String {
+        input["files"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
+            .unwrap_or_else(|| "?".to_string())
+    }
+
     fn run(&self, root: &Path, input: ToolCallInput) -> anyhow::Result<String> {
         let input: GitAddInput = serde_json::from_value(input)?;
         self.execute(root, input)

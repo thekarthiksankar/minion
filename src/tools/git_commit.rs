@@ -44,6 +44,10 @@ impl Tool for GitCommitTool {
         }
     }
 
+    fn summary(&self, input: &ToolCallInput) -> String {
+        input["message"].as_str().unwrap_or("?").to_string()
+    }
+
     fn run(&self, root: &Path, input: ToolCallInput) -> anyhow::Result<String> {
         let input: GitCommitInput = serde_json::from_value(input)?;
         self.execute(root, input)
