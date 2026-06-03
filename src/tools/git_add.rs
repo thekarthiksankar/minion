@@ -39,7 +39,8 @@ impl Tool for GitAddTool {
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "git_add".into(),
-            description: "Stage files in the working directory for the next commit.".into(),
+            description: "Stage files in the working directory for the next commit. \
+                          Returns a confirmation listing the files that were staged.".into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {

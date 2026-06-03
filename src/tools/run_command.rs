@@ -35,7 +35,9 @@ impl Tool for RunCommandTool {
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "run_command".into(),
-            description: "Run a shell command inside the working directory and get back its output."
+            description: "Run a shell command inside the working directory. \
+                          Returns exit_code, stdout, and stderr as labelled sections. \
+                          A non-zero exit_code means the command failed."
                 .into(),
             input_schema: serde_json::json!({
                 "type": "object",

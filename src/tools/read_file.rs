@@ -41,7 +41,8 @@ impl Tool for ReadFileTool {
         ToolSchema {
             name: "read_file".into(),
             description: "Read the contents of a file in the working directory. \
-                          Optionally restrict to a line range (1-indexed, inclusive)."
+                          Optionally restrict to a line range (1-indexed, inclusive). \
+                          Returns the file contents as plain text."
                 .into(),
             input_schema: serde_json::json!({
                 "type": "object",

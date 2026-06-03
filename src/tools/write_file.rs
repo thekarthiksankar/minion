@@ -32,7 +32,8 @@ impl Tool for WriteFileTool {
         ToolSchema {
             name: "write_file".into(),
             description: "Write content to a file in the working directory. \
-                          Creates the file and any missing parent directories if they don't exist."
+                          Creates the file and any missing parent directories if they don't exist. \
+                          Returns a confirmation with the path that was written."
                 .into(),
             input_schema: serde_json::json!({
                 "type": "object",
