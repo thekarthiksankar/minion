@@ -1,6 +1,7 @@
 mod dispatcher;
 mod path;
 mod read_file;
+mod run_command;
 mod write_file;
 
 pub use dispatcher::Dispatcher;
