@@ -17,6 +17,7 @@ impl Dispatcher {
     pub fn with_default_tools() -> Self {
         let mut d = Self::new();
         d.register(Box::new(super::read_file::ReadFileTool));
+        d.register(Box::new(super::write_file::WriteFileTool));
         d
     }
 
@@ -40,7 +41,7 @@ impl Dispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tools::ReadFileTool;
+    use crate::tools::read_file::ReadFileTool;
 
     #[test]
     fn dispatches_read_file() {

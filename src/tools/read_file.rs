@@ -2,7 +2,7 @@ use anyhow::Context;
 use serde::Deserialize;
 use std::path::Path;
 
-use super::path::resolve_path;
+use super::path::resolve_readable_path;
 use super::{Tool, ToolCallInput};
 use crate::llm::ToolSchema;
 
@@ -17,7 +17,7 @@ struct ReadFileInput {
 
 impl ReadFileTool {
     fn execute(&self, root: &Path, input: ReadFileInput) -> anyhow::Result<String> {
-        let abs = resolve_path(root, &input.path)?;
+        let abs = resolve_readable_path(root, &input.path)?;
         let content =
             std::fs::read_to_string(&abs).with_context(|| format!("read '{}'", abs.display()))?;
 
