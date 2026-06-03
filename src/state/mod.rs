@@ -4,12 +4,14 @@ mod push_branch;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::agent::LoopOutcome;
 use crate::isolation::{InPlaceBranchIsolation, Isolation};
 use crate::isolation::in_place::find_repo_root;
 use crate::llm::LlmClient;
+use crate::telemetry::{Telemetry, RunLogBackend};
 
 use gather_context::GatherContext;
 use implement::Implement;
@@ -23,7 +25,7 @@ pub struct RunContext {
 
 impl RunContext {
     pub fn new(task: String, repo: &Path) -> anyhow::Result<Self> {
-        let run_id = Uuid::new_v4().to_string();
+        let run_id = Uuid::now_v7().to_string();
         let repo_root = find_repo_root(repo)?;
         let isolation = InPlaceBranchIsolation::create(&repo_root, &run_id, &task)?;
 
@@ -53,32 +55,52 @@ pub async fn run_state_machine(ctx: RunContext, client: Box<dyn LlmClient>) -> R
     let branch = ctx.branch().to_string();
     let repo = ctx.working_path().to_path_buf();
 
-    println!("[1/3] gathering context");
-    GatherContext.run(&ctx);
+    let run_dir = repo.join(".minion").join("runs").join(&ctx.run_id);
+    let backend = match RunLogBackend::new(
+        &ctx.run_id,
+        &ctx.task,
+        &branch,
+        &repo.display().to_string(),
+        run_dir,
+    ) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("warning: could not initialise telemetry: {e}");
+            // Continue without telemetry by using a no-op — for now just bail.
+            return RunOutcome::Failed(e);
+        }
+    };
+    let telemetry = Arc::new(Telemetry::new(Box::new(backend)));
 
-    println!("[2/3] implementing");
-    match Implement.run(&ctx, client).await {
+    telemetry.run_phase(1, 3, "gathering context");
+    GatherContext.run(&ctx, &telemetry);
+
+    telemetry.run_phase(2, 3, "implementing");
+    match Implement.run(&ctx, client, Arc::clone(&telemetry)).await {
         LoopOutcome::Failed(e) => {
+            let _ = telemetry.finish("failed", Some(&e.to_string()));
             cleanup_branch(&repo, &branch);
             return RunOutcome::Failed(e);
         }
         LoopOutcome::StepLimitExhausted => {
+            let _ = telemetry.finish("step_limit_exhausted", None);
             cleanup_branch(&repo, &branch);
             return RunOutcome::StepLimitExhausted { branch };
         }
         LoopOutcome::Complete => {}
     }
 
-    println!("[3/3] pushing branch");
-    if let Err(e) = PushBranch.run(&ctx) {
+    telemetry.run_phase(3, 3, "pushing branch");
+    if let Err(e) = PushBranch.run(&ctx, &telemetry) {
+        let _ = telemetry.finish("failed", Some(&e.to_string()));
         cleanup_branch(&repo, &branch);
         return RunOutcome::Failed(e);
     }
 
+    let _ = telemetry.finish("succeeded", None);
     RunOutcome::Succeeded { branch }
 }
 
-/// Deletes the minion branch after the run context is dropped (i.e. after checkout back to original branch).
 fn cleanup_branch(repo: &PathBuf, branch: &str) {
     let _ = Command::new("git")
         .args(["branch", "-D", branch])

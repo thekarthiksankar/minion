@@ -3,6 +3,7 @@ mod cli;
 mod isolation;
 mod llm;
 mod state;
+mod telemetry;
 mod tools;
 
 #[tokio::main]

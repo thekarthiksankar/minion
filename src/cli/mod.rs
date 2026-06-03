@@ -40,13 +40,12 @@ pub async fn run() -> anyhow::Result<()> {
 
             match run_state_machine(ctx, client).await {
                 RunOutcome::Succeeded { branch } => {
-                    println!("\ndone — open a PR from branch: {branch}");
+                    println!("open a PR from branch: {branch}");
                 }
                 RunOutcome::StepLimitExhausted { branch: _ } => {
-                    println!("\nstopped — step limit reached, branch cleaned up");
+                    println!("step limit reached — branch cleaned up");
                 }
-                RunOutcome::Failed(e) => {
-                    eprintln!("\nfailed: {e}");
+                RunOutcome::Failed(_) => {
                     std::process::exit(1);
                 }
             }

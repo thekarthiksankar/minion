@@ -1,13 +1,18 @@
 use std::path::Path;
 use std::process::Command;
+use std::time::Instant;
+
+use crate::telemetry::Telemetry;
 
 use super::RunContext;
 
 pub struct PushBranch;
 
 impl PushBranch {
-    pub fn run(&self, ctx: &RunContext) -> anyhow::Result<()> {
-        println!("  pushing {} to origin...", ctx.branch());
+    pub fn run(&self, ctx: &RunContext, telemetry: &Telemetry) -> anyhow::Result<()> {
+        let start = Instant::now();
+        telemetry.step_started("push");
+        telemetry.info("push", &format!("pushing {} to origin", ctx.branch()));
 
         let output = Command::new("git")
             .args(["push", "origin", ctx.branch()])
@@ -20,7 +25,7 @@ impl PushBranch {
             anyhow::bail!("git push failed: {stderr}");
         }
 
-        println!("  pushed");
+        telemetry.step_finished("push", start.elapsed().as_millis() as u64);
         Ok(())
     }
 }

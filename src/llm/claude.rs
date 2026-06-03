@@ -43,9 +43,16 @@ struct ApiRequest<'a> {
 }
 
 #[derive(Deserialize)]
+struct ApiUsage {
+    input_tokens: u32,
+    output_tokens: u32,
+}
+
+#[derive(Deserialize)]
 struct ApiResponse {
     content: Vec<ContentBlock>,
     stop_reason: String,
+    usage: ApiUsage,
 }
 
 #[async_trait]
@@ -86,7 +93,14 @@ impl LlmClient for ClaudeClient {
                     "max_tokens" => StopReason::MaxTokens,
                     _ => StopReason::EndTurn,
                 };
-                return Ok(LlmResponse { content: body.content, stop_reason });
+                return Ok(LlmResponse {
+                    content: body.content,
+                    stop_reason,
+                    usage: crate::llm::TokenUsage {
+                        input_tokens: body.usage.input_tokens,
+                        output_tokens: body.usage.output_tokens,
+                    },
+                });
             }
 
             // Retry on rate limit and transient server errors.

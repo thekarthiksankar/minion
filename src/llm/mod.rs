@@ -43,10 +43,17 @@ pub struct ToolSchema {
     pub input_schema: serde_json::Value,
 }
 
+#[derive(Debug, Default)]
+pub struct TokenUsage {
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+}
+
 #[derive(Debug)]
 pub struct LlmResponse {
     pub content: Vec<ContentBlock>,
     pub stop_reason: StopReason,
+    pub usage: TokenUsage,
 }
 
 #[derive(Debug, PartialEq)]
