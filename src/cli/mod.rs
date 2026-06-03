@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
-use crate::state::RunContext;
+use crate::llm;
+use crate::state::{run_state_machine, RunContext, RunOutcome};
 
 #[derive(Parser)]
 #[command(name = "minion", about = "One shot coding agent")]
@@ -35,9 +36,21 @@ pub async fn run() -> anyhow::Result<()> {
         Command::Run { task, file, repo } => {
             let task_input = resolve_task(task, file).await?;
             let ctx = RunContext::new(task_input, &repo)?;
+            let client = llm::default_client()?;
             tracing::info!(run_id = %ctx.run_id, branch = %ctx.branch(), "run started");
-            println!("run {} on branch {}", ctx.run_id, ctx.branch());
-            // TODO: hand off to state machine — task #8
+
+            match run_state_machine(ctx, client).await {
+                RunOutcome::Succeeded { branch } => {
+                    println!("done — branch: {branch}");
+                }
+                RunOutcome::StepLimitExhausted { branch } => {
+                    println!("step limit reached — partial work on branch: {branch}");
+                }
+                RunOutcome::Failed(e) => {
+                    eprintln!("run failed: {e}");
+                    std::process::exit(1);
+                }
+            }
             Ok(())
         }
     }

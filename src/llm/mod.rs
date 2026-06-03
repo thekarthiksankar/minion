@@ -1,5 +1,4 @@
-pub mod claude;
-pub use claude::ClaudeClient;
+mod claude;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -65,4 +64,9 @@ pub trait LlmClient: Send + Sync {
         tools: Vec<ToolSchema>,
         max_tokens: u32,
     ) -> anyhow::Result<LlmResponse>;
+}
+
+/// Creates the default LLM client from environment configuration.
+pub fn default_client() -> anyhow::Result<Box<dyn LlmClient>> {
+    Ok(Box::new(claude::ClaudeClient::from_env()?))
 }
