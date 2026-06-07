@@ -3,6 +3,7 @@ mod git_add;
 mod git_commit;
 mod path;
 mod read_file;
+mod rename_file;
 mod run_command;
 mod task_complete;
 mod write_file;
