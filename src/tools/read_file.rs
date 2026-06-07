@@ -15,6 +15,7 @@ struct ReadFileInput {
     end_line: Option<usize>,
 }
 
+// Clarify: Shouldn't we just unwrap the parameters and then proceed to read the file rather than directly reading the whole file and filtering out the parts later. 
 impl ReadFileTool {
     fn execute(&self, root: &Path, input: ReadFileInput) -> anyhow::Result<String> {
         let abs = resolve_readable_path(root, &input.path)?;
