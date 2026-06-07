@@ -19,4 +19,14 @@ unreviewed rewrites have slipped real bugs and noise into diffs before.
    the exact path the change targets (e.g. the interruption/recovery path for a crash-safety
    fix). Add a test for the specific scenario being fixed when feasible.
 
-<!-- Codebase docs can be added below later (e.g. via /init). -->
+## Commit style
+
+Format: `type: short imperative subject`
+
+- No scope in parentheses, no body, no footer.
+- Types: `feat`, `fix`, `refactor`, `chore`, `test`, `docs`.
+- Subject is lowercase, no trailing period, ≤72 chars.
+- Examples from this repo:
+  - `feat: add rename_file tool`
+  - `fix: remove dead LLM statement and improve Ollama tool-call parsing`
+  - `refactor: rewrite telemetry as append-only NDJSON event log`
