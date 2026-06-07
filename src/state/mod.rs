@@ -48,7 +48,8 @@ impl RunContext {
 pub enum RunOutcome {
     Succeeded { branch: String },
     StepLimitExhausted { branch: String },
-    Failed(anyhow::Error),
+    Abandoned { branch: String },
+    Failed { branch: Option<String>, error: anyhow::Error },
 }
 
 pub async fn run_state_machine(ctx: RunContext, client: Box<dyn LlmClient>) -> RunOutcome {
@@ -66,8 +67,8 @@ pub async fn run_state_machine(ctx: RunContext, client: Box<dyn LlmClient>) -> R
         Ok(b) => b,
         Err(e) => {
             eprintln!("warning: could not initialise telemetry: {e}");
-            // Continue without telemetry by using a no-op — for now just bail.
-            return RunOutcome::Failed(e);
+            cleanup_branch(&repo, &branch);
+            return RunOutcome::Failed { branch: Some(branch), error: e };
         }
     };
     let telemetry = Arc::new(Telemetry::new(Box::new(backend)));
@@ -80,7 +81,7 @@ pub async fn run_state_machine(ctx: RunContext, client: Box<dyn LlmClient>) -> R
         LoopOutcome::Failed(e) => {
             let _ = telemetry.finish("failed", Some(&e.to_string()));
             cleanup_branch(&repo, &branch);
-            return RunOutcome::Failed(e);
+            return RunOutcome::Failed { branch: Some(branch), error: e };
         }
         LoopOutcome::StepLimitExhausted => {
             let _ = telemetry.finish("step_limit_exhausted", None);
@@ -90,7 +91,7 @@ pub async fn run_state_machine(ctx: RunContext, client: Box<dyn LlmClient>) -> R
         LoopOutcome::Abandoned => {
             let _ = telemetry.finish("task_abandoned", None);
             cleanup_branch(&repo, &branch);
-            return RunOutcome::StepLimitExhausted { branch };
+            return RunOutcome::Abandoned { branch };
         }
         LoopOutcome::Complete => {}
     }
@@ -99,7 +100,7 @@ pub async fn run_state_machine(ctx: RunContext, client: Box<dyn LlmClient>) -> R
     if let Err(e) = PushBranch.run(&ctx, &telemetry) {
         let _ = telemetry.finish("failed", Some(&e.to_string()));
         cleanup_branch(&repo, &branch);
-        return RunOutcome::Failed(e);
+        return RunOutcome::Failed { branch: Some(branch), error: e };
     }
 
     let _ = telemetry.finish("succeeded", None);

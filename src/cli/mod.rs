@@ -42,10 +42,19 @@ pub async fn run() -> anyhow::Result<()> {
                 RunOutcome::Succeeded { branch } => {
                     println!("open a PR from branch: {branch}");
                 }
-                RunOutcome::StepLimitExhausted { branch: _ } => {
-                    println!("step limit reached — branch cleaned up");
+                RunOutcome::StepLimitExhausted { branch } => {
+                    eprintln!("step limit reached — branch cleaned up: {branch}");
+                    std::process::exit(1);
                 }
-                RunOutcome::Failed(_) => {
+                RunOutcome::Abandoned { branch } => {
+                    eprintln!("agent abandoned task — branch cleaned up: {branch}");
+                    std::process::exit(1);
+                }
+                RunOutcome::Failed { branch, error } => {
+                    eprintln!("run failed: {error}");
+                    if let Some(b) = branch {
+                        eprintln!("partial branch cleaned up: {b}");
+                    }
                     std::process::exit(1);
                 }
             }
