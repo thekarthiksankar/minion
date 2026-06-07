@@ -21,6 +21,7 @@ impl Dispatcher {
         d.register(Box::new(super::run_command::RunCommandTool));
         d.register(Box::new(super::git_add::GitAddTool));
         d.register(Box::new(super::git_commit::GitCommitTool));
+        d.register(Box::new(super::task_complete::TaskCompleteTool));
         d
     }
 

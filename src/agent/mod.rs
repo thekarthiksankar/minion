@@ -10,6 +10,7 @@ const MAX_TOKENS: u32 = 8192;
 
 pub enum LoopOutcome {
     Complete,
+    Abandoned,
     StepLimitExhausted,
     Failed(anyhow::Error),
 }
@@ -90,22 +91,16 @@ impl AgentLoop {
                     response.usage.input_tokens,
                     response.usage.output_tokens,
                 );
-                return LoopOutcome::Complete;
-            }
-
-            if turn_num >= MAX_TURNS {
-                telemetry.turn_finished(
-                    turn_num,
-                    turn_start.elapsed().as_millis() as u64,
-                    response.usage.input_tokens,
-                    response.usage.output_tokens,
-                );
-                return LoopOutcome::StepLimitExhausted;
+                return LoopOutcome::Abandoned;
             }
 
             let mut tool_results = Vec::new();
+            let mut task_done = false;
             for block in tool_uses {
                 if let ContentBlock::ToolUse { id, name, input } = block {
+                    if name == "task_complete" {
+                        task_done = true;
+                    }
                     let summary = self.dispatcher.summary(name.as_str(), &input);
                     let tool_start = Instant::now();
                     let result = self
@@ -143,6 +138,14 @@ impl AgentLoop {
                 response.usage.output_tokens,
             );
 
+            if task_done {
+                return LoopOutcome::Complete;
+            }
+
+            if turn_num >= MAX_TURNS {
+                return LoopOutcome::StepLimitExhausted;
+            }
+
             messages.push(Message {
                 role: Role::User,
                 content: tool_results,
@@ -157,7 +160,9 @@ fn opening_message(task: &str) -> Message {
         content: vec![ContentBlock::Text {
             text: format!(
                 "You are an autonomous coding agent. Complete the following task by using the \
-                 tools available to you. When you are done, stop calling tools.\n\nTask: {task}"
+                 tools available to you. When you have finished all work, call `task_complete` \
+                 with a brief summary of what was accomplished. Do not stop calling tools \
+                 without first calling `task_complete`.\n\nTask: {task}"
             ),
         }],
     }

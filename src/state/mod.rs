@@ -87,6 +87,11 @@ pub async fn run_state_machine(ctx: RunContext, client: Box<dyn LlmClient>) -> R
             cleanup_branch(&repo, &branch);
             return RunOutcome::StepLimitExhausted { branch };
         }
+        LoopOutcome::Abandoned => {
+            let _ = telemetry.finish("task_abandoned", None);
+            cleanup_branch(&repo, &branch);
+            return RunOutcome::StepLimitExhausted { branch };
+        }
         LoopOutcome::Complete => {}
     }
 

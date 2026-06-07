@@ -4,6 +4,7 @@ mod git_commit;
 mod path;
 mod read_file;
 mod run_command;
+mod task_complete;
 mod write_file;
 
 pub use dispatcher::Dispatcher;
