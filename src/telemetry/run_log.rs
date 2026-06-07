@@ -55,6 +55,22 @@ enum Event<'a> {
         error: Option<&'a str>,
         duration_ms: u64,
     },
+    LlmRequest {
+        turn: u32,
+        provider: &'a str,
+        model: &'a str,
+        params: serde_json::Value,
+        messages: serde_json::Value,
+        tools: serde_json::Value,
+    },
+    LlmResponse {
+        turn: u32,
+        content: serde_json::Value,
+        stop_reason: &'a str,
+        input_tokens: u32,
+        output_tokens: u32,
+        duration_ms: u64,
+    },
 }
 
 #[derive(Serialize)]
@@ -77,6 +93,8 @@ enum StoredEvent {
     TurnFinished { number: u32, duration_ms: u64, input_tokens: u32, output_tokens: u32 },
     ToolCalled { tool: String, summary: String, success: bool, duration_ms: u64, error: Option<String> },
     RunFinished { outcome: String, error: Option<String>, duration_ms: u64 },
+    LlmRequest { turn: u32, provider: String, model: String, params: serde_json::Value, messages: serde_json::Value, tools: serde_json::Value },
+    LlmResponse { turn: u32, content: serde_json::Value, stop_reason: String, input_tokens: u32, output_tokens: u32, duration_ms: u64 },
 }
 
 // ── Report structures (derived, never authoritative) ──────────────────────────
@@ -212,6 +230,16 @@ impl TelemetryBackend for RunLogBackend {
         self.append(Event::ToolCalled { tool: name, summary, success, duration_ms, error });
     }
 
+    fn llm_request(&self, turn: u32, provider: &str, model: &str, params: serde_json::Value, messages: serde_json::Value, tools: serde_json::Value) {
+        print_line("I", "llm", &format!("→ {provider}/{model} turn #{turn}"));
+        self.append(Event::LlmRequest { turn, provider, model, params, messages, tools });
+    }
+
+    fn llm_response(&self, turn: u32, content: serde_json::Value, stop_reason: &str, input_tokens: u32, output_tokens: u32, duration_ms: u64) {
+        print_line("I", "llm", &format!("← turn #{turn} [{stop_reason} | {input_tokens}↑ {output_tokens}↓ | {duration_ms}ms]"));
+        self.append(Event::LlmResponse { turn, content, stop_reason, input_tokens, output_tokens, duration_ms });
+    }
+
     fn finish(&self, outcome: &str, error: Option<&str>, duration_ms: u64) -> anyhow::Result<()> {
         if let Some(msg) = error {
             print_line("E", "run", &format!("failed — {msg}"));
@@ -284,7 +312,10 @@ impl RunLogBackend {
                     run_error = e;
                     duration_ms = d;
                 }
-                StoredEvent::RunPhase { .. } | StoredEvent::Info { .. } => {}
+                StoredEvent::RunPhase { .. }
+                | StoredEvent::Info { .. }
+                | StoredEvent::LlmRequest { .. }
+                | StoredEvent::LlmResponse { .. } => {}
             }
         }
 

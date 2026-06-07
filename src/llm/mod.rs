@@ -66,6 +66,11 @@ pub enum StopReason {
 
 #[async_trait]
 pub trait LlmClient: Send + Sync {
+    fn provider_name(&self) -> &str;
+    fn model_name(&self) -> &str;
+    /// All configured model parameters. Unset fields are explicitly null.
+    fn model_params(&self) -> serde_json::Value;
+
     async fn complete(
         &self,
         messages: Vec<Message>,

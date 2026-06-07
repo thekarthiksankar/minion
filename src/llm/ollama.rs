@@ -12,20 +12,32 @@ pub struct OllamaClient {
     http: Client,
     base_url: String,
     model: String,
+    temperature: Option<f64>,
+    top_k: Option<u32>,
+    top_p: Option<f64>,
+    num_ctx: Option<u32>,
 }
 
 impl OllamaClient {
     pub fn new(base_url: String, model: String) -> Self {
-        Self { http: Client::new(), base_url, model }
+        Self { http: Client::new(), base_url, model, temperature: None, top_k: None, top_p: None, num_ctx: None }
     }
 
     pub fn from_env() -> Self {
-        let base_url = std::env::var("OLLAMA_HOST")
-            .unwrap_or_else(|_| DEFAULT_BASE_URL.to_string());
-        let model = std::env::var("OLLAMA_MODEL")
-            .unwrap_or_else(|_| DEFAULT_MODEL.to_string());
-        Self::new(base_url, model)
+        Self {
+            http: Client::new(),
+            base_url: std::env::var("OLLAMA_HOST").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string()),
+            model: std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.to_string()),
+            temperature: env_parse("OLLAMA_TEMPERATURE"),
+            top_k: env_parse("OLLAMA_TOP_K"),
+            top_p: env_parse("OLLAMA_TOP_P"),
+            num_ctx: env_parse("OLLAMA_NUM_CTX"),
+        }
     }
+}
+
+fn env_parse<T: std::str::FromStr>(key: &str) -> Option<T> {
+    std::env::var(key).ok()?.parse().ok()
 }
 
 #[derive(Serialize, Deserialize)]
@@ -65,6 +77,14 @@ struct OllamaToolDef {
 #[derive(Serialize)]
 struct OllamaOptions {
     num_predict: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    num_ctx: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -159,6 +179,25 @@ fn to_ollama_tools(tools: &[ToolSchema]) -> Vec<OllamaTool> {
 
 #[async_trait]
 impl LlmClient for OllamaClient {
+    fn provider_name(&self) -> &str {
+        "ollama"
+    }
+
+    fn model_name(&self) -> &str {
+        &self.model
+    }
+
+    fn model_params(&self) -> serde_json::Value {
+        serde_json::json!({
+            "base_url": self.base_url,
+            "model": self.model,
+            "temperature": self.temperature,
+            "top_k": self.top_k,
+            "top_p": self.top_p,
+            "num_ctx": self.num_ctx,
+        })
+    }
+
     async fn complete(
         &self,
         messages: Vec<Message>,
@@ -170,7 +209,13 @@ impl LlmClient for OllamaClient {
             messages: to_ollama_messages(&messages),
             tools: to_ollama_tools(&tools),
             stream: false,
-            options: OllamaOptions { num_predict: max_tokens },
+            options: OllamaOptions {
+                num_predict: max_tokens,
+                temperature: self.temperature,
+                top_k: self.top_k,
+                top_p: self.top_p,
+                num_ctx: self.num_ctx,
+            },
         };
 
         let url = format!("{}/api/chat", self.base_url);

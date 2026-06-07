@@ -14,6 +14,8 @@ pub trait TelemetryBackend: Send + Sync {
     fn turn_started(&self, number: u32);
     fn turn_finished(&self, number: u32, duration_ms: u64, input_tokens: u32, output_tokens: u32);
     fn tool_called(&self, name: &str, summary: &str, success: bool, duration_ms: u64, error: Option<&str>);
+    fn llm_request(&self, turn: u32, provider: &str, model: &str, params: serde_json::Value, messages: serde_json::Value, tools: serde_json::Value);
+    fn llm_response(&self, turn: u32, content: serde_json::Value, stop_reason: &str, input_tokens: u32, output_tokens: u32, duration_ms: u64);
     fn finish(&self, outcome: &str, error: Option<&str>, duration_ms: u64) -> anyhow::Result<()>;
 }
 
@@ -54,6 +56,14 @@ impl Telemetry {
 
     pub fn tool_called(&self, name: &str, summary: &str, success: bool, duration_ms: u64, error: Option<&str>) {
         self.backend.tool_called(name, summary, success, duration_ms, error);
+    }
+
+    pub fn llm_request(&self, turn: u32, provider: &str, model: &str, params: serde_json::Value, messages: serde_json::Value, tools: serde_json::Value) {
+        self.backend.llm_request(turn, provider, model, params, messages, tools);
+    }
+
+    pub fn llm_response(&self, turn: u32, content: serde_json::Value, stop_reason: &str, input_tokens: u32, output_tokens: u32, duration_ms: u64) {
+        self.backend.llm_response(turn, content, stop_reason, input_tokens, output_tokens, duration_ms);
     }
 
     pub fn finish(&self, outcome: &str, error: Option<&str>) -> anyhow::Result<()> {

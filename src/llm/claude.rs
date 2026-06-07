@@ -16,16 +16,24 @@ const MAX_HTTP_RETRIES: u32 = 2;
 pub struct ClaudeClient {
     http: Client,
     api_key: String,
+    temperature: Option<f64>,
+    top_p: Option<f64>,
+    top_k: Option<u32>,
 }
 
 impl ClaudeClient {
     pub fn new(api_key: String) -> Self {
-        Self { http: Client::new(), api_key }
+        Self { http: Client::new(), api_key, temperature: None, top_p: None, top_k: None }
     }
 
     pub fn from_env() -> anyhow::Result<Self> {
-        let api_key = api_key_from_env()?;
-        Ok(Self::new(api_key))
+        Ok(Self {
+            http: Client::new(),
+            api_key: api_key_from_env()?,
+            temperature: env_parse("ANTHROPIC_TEMPERATURE"),
+            top_p: env_parse("ANTHROPIC_TOP_P"),
+            top_k: env_parse("ANTHROPIC_TOP_K"),
+        })
     }
 }
 
@@ -34,12 +42,22 @@ fn api_key_from_env() -> anyhow::Result<String> {
         .context("ANTHROPIC_API_KEY not set — export it before running: export ANTHROPIC_API_KEY=<your-key>")
 }
 
+fn env_parse<T: std::str::FromStr>(key: &str) -> Option<T> {
+    std::env::var(key).ok()?.parse().ok()
+}
+
 #[derive(Serialize)]
 struct ApiRequest<'a> {
     model: &'static str,
     max_tokens: u32,
     messages: &'a [Message],
     tools: &'a [ToolSchema],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -57,13 +75,39 @@ struct ApiResponse {
 
 #[async_trait]
 impl LlmClient for ClaudeClient {
+    fn provider_name(&self) -> &str {
+        "anthropic"
+    }
+
+    fn model_name(&self) -> &str {
+        MODEL
+    }
+
+    fn model_params(&self) -> serde_json::Value {
+        serde_json::json!({
+            "model": MODEL,
+            "api_url": API_URL,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "top_k": self.top_k,
+        })
+    }
+
     async fn complete(
         &self,
         messages: Vec<Message>,
         tools: Vec<ToolSchema>,
         max_tokens: u32,
     ) -> anyhow::Result<LlmResponse> {
-        let req = ApiRequest { model: MODEL, max_tokens, messages: &messages, tools: &tools };
+        let req = ApiRequest {
+            model: MODEL,
+            max_tokens,
+            messages: &messages,
+            tools: &tools,
+            temperature: self.temperature,
+            top_p: self.top_p,
+            top_k: self.top_k,
+        };
 
         let mut delay = Duration::from_secs(1);
         let mut last_err = String::new();

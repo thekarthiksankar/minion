@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use crate::llm::{ContentBlock, LlmClient, Message, Role};
+use crate::llm::{ContentBlock, LlmClient, Message, Role, StopReason};
 use crate::state::RunContext;
 use crate::telemetry::Telemetry;
 use crate::tools::Dispatcher;
@@ -37,10 +37,40 @@ impl AgentLoop {
             let turn_start = Instant::now();
             telemetry.turn_started(turn_num);
 
+            // Capture the full request payload for telemetry before the call.
+            let messages_json = serde_json::to_value(&messages).unwrap_or(serde_json::Value::Null);
+            let tools_json = serde_json::to_value(&tools).unwrap_or(serde_json::Value::Null);
+            telemetry.llm_request(
+                turn_num,
+                self.client.provider_name(),
+                self.client.model_name(),
+                self.client.model_params(),
+                messages_json,
+                tools_json,
+            );
+
+            let llm_start = Instant::now();
             let response = match self.client.complete(messages.clone(), tools.clone(), MAX_TOKENS).await {
                 Ok(r) => r,
                 Err(e) => return LoopOutcome::Failed(e),
             };
+            let llm_duration = llm_start.elapsed().as_millis() as u64;
+
+            // Capture the full response payload for telemetry.
+            let stop_reason_str = match response.stop_reason {
+                StopReason::EndTurn => "end_turn",
+                StopReason::ToolUse => "tool_use",
+                StopReason::MaxTokens => "max_tokens",
+            };
+            let content_json = serde_json::to_value(&response.content).unwrap_or(serde_json::Value::Null);
+            telemetry.llm_response(
+                turn_num,
+                content_json,
+                stop_reason_str,
+                response.usage.input_tokens,
+                response.usage.output_tokens,
+                llm_duration,
+            );
 
             let tool_uses: Vec<&ContentBlock> = response
                 .content
