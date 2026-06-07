@@ -3,10 +3,12 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use super::{ContentBlock, LlmClient, LlmResponse, Message, Role, StopReason, TokenUsage, ToolSchema};
+use super::{
+    ContentBlock, LlmClient, LlmResponse, Message, Role, StopReason, TokenUsage, ToolSchema,
+};
 
 const DEFAULT_BASE_URL: &str = "http://localhost:11434";
-const DEFAULT_MODEL: &str = "gemma4:12b";
+const DEFAULT_MODEL: &str = "qwen2.5-coder:7b";
 
 pub struct OllamaClient {
     http: Client,
@@ -20,7 +22,15 @@ pub struct OllamaClient {
 
 impl OllamaClient {
     pub fn new(base_url: String, model: String) -> Self {
-        Self { http: Client::new(), base_url, model, temperature: None, top_k: None, top_p: None, num_ctx: None }
+        Self {
+            http: Client::new(),
+            base_url,
+            model,
+            temperature: None,
+            top_k: None,
+            top_p: None,
+            num_ctx: None,
+        }
     }
 
     pub fn from_env() -> Self {
@@ -117,7 +127,10 @@ fn to_ollama_messages(messages: &[Message]) -> Vec<OllamaMessage> {
         };
 
         // User messages may contain tool results — emit each as a "tool" role message.
-        let has_tool_results = msg.content.iter().any(|b| matches!(b, ContentBlock::ToolResult { .. }));
+        let has_tool_results = msg
+            .content
+            .iter()
+            .any(|b| matches!(b, ContentBlock::ToolResult { .. }));
         if has_tool_results {
             for block in &msg.content {
                 if let ContentBlock::ToolResult { content, .. } = block {
@@ -134,7 +147,13 @@ fn to_ollama_messages(messages: &[Message]) -> Vec<OllamaMessage> {
         let text: String = msg
             .content
             .iter()
-            .filter_map(|b| if let ContentBlock::Text { text } = b { Some(text.as_str()) } else { None })
+            .filter_map(|b| {
+                if let ContentBlock::Text { text } = b {
+                    Some(text.as_str())
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -145,7 +164,10 @@ fn to_ollama_messages(messages: &[Message]) -> Vec<OllamaMessage> {
                 if let ContentBlock::ToolUse { id, name, input } = b {
                     Some(OllamaToolCall {
                         id: Some(id.clone()),
-                        function: OllamaFunction { name: name.clone(), arguments: input.clone() },
+                        function: OllamaFunction {
+                            name: name.clone(),
+                            arguments: input.clone(),
+                        },
                     })
                 } else {
                     None
@@ -156,7 +178,11 @@ fn to_ollama_messages(messages: &[Message]) -> Vec<OllamaMessage> {
         out.push(OllamaMessage {
             role: role.to_string(),
             content: text,
-            tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+            tool_calls: if tool_calls.is_empty() {
+                None
+            } else {
+                Some(tool_calls)
+            },
         });
     }
 
@@ -175,6 +201,48 @@ fn to_ollama_tools(tools: &[ToolSchema]) -> Vec<OllamaTool> {
             },
         })
         .collect()
+}
+
+fn try_parse_tool_call(s: &str) -> Option<OllamaToolCall> {
+    let val: serde_json::Value = serde_json::from_str(s.trim()).ok()?;
+    let name = val.get("name")?.as_str()?.to_string();
+    let arguments = val
+        .get("arguments")
+        .cloned()
+        .unwrap_or(serde_json::Value::Object(Default::default()));
+    arguments.as_object()?;
+    Some(OllamaToolCall {
+        id: None,
+        function: OllamaFunction { name, arguments },
+    })
+}
+
+fn extract_tool_calls_from_content(content: &str) -> Vec<OllamaToolCall> {
+    // Try markdown-fenced blocks first (``` ... ```)
+    let parts: Vec<&str> = content.split("```").collect();
+    if parts.len() >= 3 {
+        let mut calls = Vec::new();
+        for chunk in parts.iter().skip(1).step_by(2) {
+            let inner = chunk
+                .strip_prefix("json\n")
+                .or_else(|| chunk.strip_prefix("json\r\n"))
+                .unwrap_or(chunk)
+                .trim();
+            if let Some(tc) = try_parse_tool_call(inner) {
+                calls.push(tc);
+            }
+        }
+        if !calls.is_empty() {
+            return calls;
+        }
+    }
+
+    // Fall back to bare JSON (Ollama strips <tool_call> tags but leaves raw JSON in content)
+    if let Some(tc) = try_parse_tool_call(content) {
+        return vec![tc];
+    }
+
+    Vec::new()
 }
 
 #[async_trait]
@@ -234,13 +302,16 @@ impl LlmClient for OllamaClient {
             anyhow::bail!("Ollama API error {status}: {body}");
         }
 
-        let body: OllamaResponse =
-            resp.json().await.context("failed to parse Ollama response")?;
+        let body: OllamaResponse = resp
+            .json()
+            .await
+            .context("failed to parse Ollama response")?;
 
         let mut content = Vec::new();
 
-        if let Some(tool_calls) = body.message.tool_calls {
-            for (i, tc) in tool_calls.into_iter().enumerate() {
+        let structured = body.message.tool_calls.unwrap_or_default();
+        let used_content = if !structured.is_empty() {
+            for (i, tc) in structured.into_iter().enumerate() {
                 let id = tc.id.unwrap_or_else(|| format!("call_{i}"));
                 content.push(ContentBlock::ToolUse {
                     id,
@@ -248,13 +319,33 @@ impl LlmClient for OllamaClient {
                     input: tc.function.arguments,
                 });
             }
+            false
+        } else {
+            // qwen2 family: Ollama has no built-in parser for this architecture, so tool calls
+            // land in content as bare JSON (after <tool_call> tag stripping) or markdown-fenced
+            // JSON (when the model ignores the "no backticks" template instruction).
+            let extracted = extract_tool_calls_from_content(&body.message.content);
+            let found = !extracted.is_empty();
+            for (i, tc) in extracted.into_iter().enumerate() {
+                let id = tc.id.unwrap_or_else(|| format!("call_{i}"));
+                content.push(ContentBlock::ToolUse {
+                    id,
+                    name: tc.function.name,
+                    input: tc.function.arguments,
+                });
+            }
+            found
+        };
+
+        if !body.message.content.is_empty() && !used_content {
+            content.push(ContentBlock::Text {
+                text: body.message.content,
+            });
         }
 
-        if !body.message.content.is_empty() {
-            content.push(ContentBlock::Text { text: body.message.content });
-        }
-
-        let has_tool_use = content.iter().any(|b| matches!(b, ContentBlock::ToolUse { .. }));
+        let has_tool_use = content
+            .iter()
+            .any(|b| matches!(b, ContentBlock::ToolUse { .. }));
         let stop_reason = match body.done_reason.as_deref() {
             Some("tool_calls") => StopReason::ToolUse,
             Some("length") => StopReason::MaxTokens,
