@@ -1,4 +1,5 @@
 mod claude;
+pub mod ollama;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -74,6 +75,10 @@ pub trait LlmClient: Send + Sync {
 }
 
 /// Creates the default LLM client from environment configuration.
+/// Set `LLM_PROVIDER=anthropic` to use Claude instead of Ollama.
 pub fn default_client() -> anyhow::Result<Box<dyn LlmClient>> {
-    Ok(Box::new(claude::ClaudeClient::from_env()?))
+    match std::env::var("LLM_PROVIDER").as_deref() {
+        Ok("anthropic") => Ok(Box::new(claude::ClaudeClient::from_env()?)),
+        _ => Ok(Box::new(ollama::OllamaClient::from_env())),
+    }
 }
