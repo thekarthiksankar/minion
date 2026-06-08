@@ -16,6 +16,7 @@ impl Dispatcher {
 
     pub fn with_default_tools() -> Self {
         let mut d = Self::new();
+        d.register(Box::new(super::list_directory::ListDirectoryTool));
         d.register(Box::new(super::read_file::ReadFileTool));
         d.register(Box::new(super::write_file::WriteFileTool));
         d.register(Box::new(super::rename_file::RenameFileTool));

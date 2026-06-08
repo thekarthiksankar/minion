@@ -1,6 +1,7 @@
 mod dispatcher;
 mod git_add;
 mod git_commit;
+mod list_directory;
 mod path;
 mod read_file;
 mod rename_file;
